@@ -413,6 +413,7 @@ class SoftwareManager(Listener, Initializer):
             elif action == "update":
                 # try update
                     logging.info('Update snap "%s" with channel "%s"', name, channel)
+                    response = snapd.updateSnaps(name, channel)
                     if response['status-code'] >= 400:
                         logging.error('Snap %s error: %s', name, response['result']['message'])
                         errors.append('Snap' + name + ' error: ' + response['result']['message'])
@@ -428,6 +429,7 @@ class SoftwareManager(Listener, Initializer):
             elif action == "delete":
                 # try remove
                     logging.info('Remove snap "%s" with channel "%s"', name, channel)
+                    response = snapd.deleteSnap(name, channel)
                     if response['status-code'] >= 400:
                         logging.error('Snap %s error: %s', name, response['result']['message'])
                         errors.append('Snap' + name + ' error: ' + response['result']['message'])
