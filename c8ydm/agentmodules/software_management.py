@@ -35,9 +35,10 @@ from c8ydm.utils import Configuration
 class SoftwareManager(Listener, Initializer):        
     """ Software Update Module"""
     logger = logging.getLogger(__name__)
-    apt_package_manager = AptPackageManager()
-    
-    def __init__(self):
+    apt_package_manager = AptPackageManager()        
+
+    def __init__(self,serial, agent):
+        super().__init__(serial, agent)
         home = expanduser('~')
         path = pathlib.Path(home + '/.cumulocity')
         config = Configuration(str(path))
