@@ -36,7 +36,8 @@ setup(
       entry_points={
         'console_scripts': [
               'c8ydm.start=c8ydm.main:start',
-              'c8ydm.stop=c8ydm.main:stop'
+              'c8ydm.stop=c8ydm.main:stop',
+              'c8ydm=c8ydm.main:start',
             ],
       },
       install_requires=[
