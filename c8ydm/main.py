@@ -77,6 +77,7 @@ def start():
         logger = logging.getLogger()
         logger.setLevel(logging.INFO)
         path = pathlib.Path(home + '/.cumulocity')
+        #path = os.environ.get('SNAP_COMMON')
         path.mkdir(parents=True, exist_ok=True)
         config_path = pathlib.Path(path / 'agent.ini')
         if not config_path.is_file():
@@ -159,6 +160,7 @@ def start():
 
 def stop():
     path = expanduser('~') + '/.cumulocity'
+    #path = os.environ.get('SNAP_COMMON')
     stopDaemon(path + '/agent.pid')
 
 def stopDaemon(pidfile):
