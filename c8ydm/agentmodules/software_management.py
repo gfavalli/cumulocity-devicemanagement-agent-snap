@@ -131,7 +131,7 @@ class SoftwareManager(Listener, Initializer):
                             self.agent.rest_client.update_managed_object(mo_id, json.dumps(installed_software))
                                 
 
-            if 's/ds' in message.topic and message.messageId == '529':
+            if 's/ds' in message.topic and message.messageId == '529' and packagemanager=="apt":
                 # Software Update with type
                 # When multiple operations received just take the first one for further processing
                 #self.logger.debug("message received :" + str(message.values))
@@ -199,7 +199,55 @@ class SoftwareManager(Listener, Initializer):
                             self.agent.publishMessage(finished)
                             #self.agent.publishMessage(
                             #    self.apt_package_manager.getInstalledSoftware(False))
-                    
+            
+            if 's/ds' in message.topic and message.messageId == '529' and packagemanager=="snap":
+                # Software Update with type
+                # When multiple operations received just take the first one for further processing
+                #self.logger.debug("message received :" + str(message.values))
+                messages = self.group(message.values, '\n')[0]
+                deviceId = messages.pop(0)
+                binary_included = False
+                self.logger.info('Software update for device ' +
+                                 deviceId + ' with message ' + str(messages))
+                executing = SmartRESTMessage(
+                    's/us', '501', ['c8y_SoftwareUpdate'])
+                self.agent.publishMessage(executing)
+                softwareToInstall = [messages[x:x + 5]
+                                     for x in range(0, len(messages), 5)]
+                for software in softwareToInstall:
+                    name = software[0]
+                    version = software[1]
+                    type = software[2]
+                    url = software[3]
+                    action = software[4]
+                    if 'binaries' in url:
+                        # File provided
+                        binary_included = True
+                installedSoftware = self.getFormatedSnaps()
+                errors = self.installSnap(installedSoftware, softwareToInstall)
+                for software in installedSoftware:
+                    self.logger.info(f'Software processed: {software}')
+                    action = software['action']
+                    name = software['name']
+                    type = software['type']
+                    version = software['version']
+                    if action == 'install' or action == 'update':
+                        self.agent.publishMessage(SmartRESTMessage('s/us', '141', [name, version, type, 'test']))
+                    if action == 'delete':
+                        self.agent.publishMessage(SmartRESTMessage('s/us', '142', [name, version]))
+                self.logger.info('Finished all software update')
+                if len(errors) == 0:
+                    # finished without errors
+                    finished = SmartRESTMessage(
+                        's/us', '503', ['c8y_SoftwareUpdate'])
+                else:
+                    # finished with errors
+                    finished = SmartRESTMessage(
+                        's/us', '502', ['c8y_SoftwareUpdate', ' - '.join(errors)])
+                self.agent.publishMessage(finished)
+                #self.agent.publishMessage(
+                #    self.apt_package_manager.getInstalledSoftware(False))
+                
                 
             if 's/ds' in message.topic and message.messageId == '516' and packagemanager=="apt":
                 # When multiple operations received just take the first one for further processing
