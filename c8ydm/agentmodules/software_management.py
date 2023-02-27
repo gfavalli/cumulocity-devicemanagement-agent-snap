@@ -379,7 +379,7 @@ class SoftwareManager(Listener, Initializer):
             # URL
             snapInfo.append(' ')
             allInstalled.extend(snapInfo)
-        return SmartRESTMessage('s/us', '116', allInstalled)
+        return SmartRESTMessage('s/us', '140', allInstalled)
     
     def installSnap(self, toBeInstalled):
         snapd = self.agent.snapdClient
