@@ -376,6 +376,8 @@ class SoftwareManager(Listener, Initializer):
             snapInfo.append(snap['name'])
             # Version
             snapInfo.append(snap['version'] + ' - ' + snap['channel'])
+            # Software Type
+            snapInfo.append('snap')
             # URL
             snapInfo.append(' ')
             allInstalled.extend(snapInfo)
