@@ -227,16 +227,18 @@ class SoftwareManager(Listener, Initializer):
                     if 'binaries' in url:
                         # File provided
                         binary_included = True
-                installedSoftware = self.getFormatedSnaps()
+                
                 errors = self.installSnap(softwareToInstall)
                 self.logger.debug("---------------------")
                 self.logger.debug(f'Following packages are installed: {installedSoftware}')
-                for software in installedSoftware:
+                for software in softwareToInstall:
                     self.logger.info(f'Software processed: {software}')
                     name = software
                     type = 'snap'
                     version = software[0]
                 self.logger.info('Finished all software update')
+                self.logger.debug("Sending all installed software via mqtt")
+                self.agent.publishMessage(self.getInstalledSoftware())
                 if len(errors) == 0:
                     # finished without errors
                     finished = SmartRESTMessage(
@@ -350,7 +352,7 @@ class SoftwareManager(Listener, Initializer):
             #return self.apt_package_manager.getInstalledSoftware(True)
         elif self.packagemanager == "snap":
             installed_software = self.getInstalledSnaps()
-            self.agent.publishMessage(installed_software)
+            return [installed_software]
         return None
     
     def getFormatedSnaps(self):
@@ -365,8 +367,6 @@ class SoftwareManager(Listener, Initializer):
                 'url': ' '
             }
         return allInstalled
-
-
     
     def getInstalledSnaps(self):
         snapd = self.agent.snapdClient
@@ -424,7 +424,6 @@ class SoftwareManager(Listener, Initializer):
                             time.sleep(3)
                             changeStatus = self.getChangeStatus(changeId)
                         logging.debug('Finished snap ' + name)
-                        self.agent.publishMessage(SmartRESTMessage('s/us', '141', [name, toBeVersion, 'snap', ' ']))
                         if changeStatus['error']:
                             errors.append(changeStatus['error'])
             elif action == "remove":
@@ -440,7 +439,6 @@ class SoftwareManager(Listener, Initializer):
                             time.sleep(3)
                             changeStatus = self.getChangeStatus(changeId)
                         logging.debug('Finished snap ' + name)
-                        self.agent.publishMessage(SmartRESTMessage('s/us', '142', [name, toBeVersion]))
                         if changeStatus['error']:
                             errors.append(changeStatus['error'])
             else:
