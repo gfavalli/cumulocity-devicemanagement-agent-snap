@@ -225,6 +225,7 @@ class SoftwareManager(Listener, Initializer):
                         binary_included = True
                 installedSoftware = self.getFormatedSnaps()
                 errors = self.installSnap(softwareToInstall)
+                self.logger.debug(f'Installing the following packages: {installed_software}')
                 for software in installedSoftware:
                     self.logger.info(f'Software processed: {software}')
                     action = software['action']
@@ -311,9 +312,6 @@ class SoftwareManager(Listener, Initializer):
                     executing = SmartRESTMessage(
                     's/us', '502', ['c8y_SoftwareList','Snapd is busy'])
                 self.agent.publishMessage(executing)
-
-                errors= self.apt_package_manager.installSoftware(
-                    softwareToInstall, True)
                 self.logger.info('Finished all software update')
                 if len(errors) == 0:
                     # finished without errors
