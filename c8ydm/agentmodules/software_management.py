@@ -236,7 +236,7 @@ class SoftwareManager(Listener, Initializer):
                     version = software[0]
                 self.logger.info('Finished all software update')
                 self.logger.debug("Sending all installed software via mqtt")
-                self.agent.publishMessage(self.getInstalledSoftware())
+                self.agent.publishMessage(self.getInstalledSnaps())
                 if len(errors) == 0:
                     # finished without errors
                     finished = SmartRESTMessage(
