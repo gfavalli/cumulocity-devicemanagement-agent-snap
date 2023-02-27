@@ -224,7 +224,7 @@ class SoftwareManager(Listener, Initializer):
                         # File provided
                         binary_included = True
                 installedSoftware = self.getFormatedSnaps()
-                errors = self.installSnap(installedSoftware, softwareToInstall)
+                errors = self.installSnap(softwareToInstall)
                 for software in installedSoftware:
                     self.logger.info(f'Software processed: {software}')
                     action = software['action']
@@ -381,7 +381,7 @@ class SoftwareManager(Listener, Initializer):
 
         return SmartRESTMessage('s/us', '116', allInstalled)
     
-    def installSnap(self, currentlyInstalled, toBeInstalled):
+    def installSnap(self, toBeInstalled):
         snapd = self.agent.snapdClient
         wantedSnaps = []
         errors = []
@@ -390,10 +390,25 @@ class SoftwareManager(Listener, Initializer):
             wantedSnaps.append(name)
             channel = software[1].split('##')[-1]
             toBeVersion = software[1].split('##')[0]
-            if name in currentlyInstalled.keys():
-                version = currentlyInstalled[name]['version']
-                if version != toBeVersion:
-                    # try update
+            action = software[4]
+            if action == "install":
+                # try install
+                logging.info('Install snap "%s" with channel "%s"', name, channel)
+                response = snapd.installSnap(name, channel)
+                if response['status-code'] >= 400:
+                    logging.error('Snap %s error: %s', name, response['result']['message'])
+                    errors.append('Snap' + name + ' error: ' + response['result']['message'])
+                elif response['status-code'] == 202:
+                    changeId = response['change']
+                    changeStatus = self.getChangeStatus(changeId)
+                    while not changeStatus['finished']:
+                        time.sleep(3)
+                        changeStatus = self.getChangeStatus(changeId)
+                    logging.debug('Finished snap ' + name)
+                    if changeStatus['error']:
+                        errors.append(changeStatus['error'])
+            elif action == "update":
+                # try update
                     logging.info('Update snap "%s" with channel "%s"', name, channel)
                     if name == 'c8ycc':
                         response = snapd.updateSnap(name, channel, devmode=True, classic=False)
@@ -411,41 +426,8 @@ class SoftwareManager(Listener, Initializer):
                         logging.debug('Finished snap ' + name)
                         if changeStatus['error']:
                             errors.append(changeStatus['error'])
-                else:
-                    # version is equal - do nothing
-                    logging.info('Will not update snap %s as same version detected', name)
+            elif action == "remove":
+                pass
             else:
-                # try install
-                logging.info('Install snap "%s" with channel "%s"', name, channel)
-                response = snapd.installSnap(name, channel)
-                if response['status-code'] >= 400:
-                    logging.info('Snap %s error: %s', name, response['result']['message'])
-                    errors.append('Snap' + name + ' error: ' + response['result']['message'])
-                elif response['status-code'] == 202:
-                    changeId = response['change']
-                    changeStatus = self.getChangeStatus(changeId)
-                    while not changeStatus['finished']:
-                        time.sleep(3)
-                        changeStatus = self.getChangeStatus(changeId)
-                    logging.debug('Finished snap ' + name)
-                    if changeStatus['error']:
-                        errors.append(changeStatus['error'])
-        # remove unwanted snaps
-        for installedSnap in currentlyInstalled:
-            if installedSnap not in wantedSnaps:
-                # try remove
-                logging.info('Remove snap "%s"', installedSnap)
-                response = snapd.deleteSnap(installedSnap)
-                if response['status-code'] >= 400:
-                    logging.info('Snap %s error: %s', name, response['result']['message'])
-                    errors.append('Snap' + name + ' error: ' + response['result']['message'])
-                elif response['status-code'] == 202:
-                    changeId = response['change']
-                    changeStatus = self.getChangeStatus(changeId)
-                    while not changeStatus['finished']:
-                        time.sleep(3)
-                        changeStatus = self.getChangeStatus(changeId)
-                    logging.debug('Finished snap ' + name)
-                    if changeStatus['error']:
-                        errors.append(changeStatus['error'])
+                pass
         return errors
