@@ -3,7 +3,7 @@ version: '1'
 summary: Cumulocity Cloud Connector
 description: |
   Cumulocity Cloud Connector
-base: core20
+base: core22
 confinement: devmode
 architectures:
   - build-on: [arm64, armhf, amd64]
