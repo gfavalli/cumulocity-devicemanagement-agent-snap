@@ -32,10 +32,19 @@ from c8ydm.framework.smartrest import SmartRESTMessage
 from c8ydm.utils import Configuration
 
 
-class SoftwareManager(Listener, Initializer):
+class SoftwareManager(Listener, Initializer):        
     """ Software Update Module"""
     logger = logging.getLogger(__name__)
     apt_package_manager = AptPackageManager()
+    
+    def __init__(self):
+        home = expanduser('~')
+        path = pathlib.Path(home + '/.cumulocity')
+        config = Configuration(str(path))
+        if config.getValue('software','packagemanager'):
+            self.packagemanager = config.getValue('software','packagemanager')
+        else:
+            self.packagemanager="apt"
 
     def group(self, seq, sep):
         result = [[]]
@@ -64,13 +73,7 @@ class SoftwareManager(Listener, Initializer):
 
     def handleOperation(self, message):
         try:
-            home = expanduser('~')
-            path = pathlib.Path(home + '/.cumulocity')
-            config = Configuration(str(path))
-            if config.getValue('software','packagemanager'):
-                packagemanager = config.getValue('software','packagemanager')
-            else:
-                packagemanager="apt"
+            
             if 's/ds' in message.topic and message.messageId == '528':
                 # Software Update without type
                 messages = self.group(message.values, '\n')[0]
@@ -131,7 +134,7 @@ class SoftwareManager(Listener, Initializer):
                             self.agent.rest_client.update_managed_object(mo_id, json.dumps(installed_software))
                                 
 
-            if 's/ds' in message.topic and message.messageId == '529' and packagemanager=="apt":
+            if 's/ds' in message.topic and message.messageId == '529' and self.packagemanager=="apt":
                 # Software Update with type
                 # When multiple operations received just take the first one for further processing
                 #self.logger.debug("message received :" + str(message.values))
@@ -200,7 +203,7 @@ class SoftwareManager(Listener, Initializer):
                             #self.agent.publishMessage(
                             #    self.apt_package_manager.getInstalledSoftware(False))
             
-            if 's/ds' in message.topic and message.messageId == '529' and packagemanager=="snap":
+            if 's/ds' in message.topic and message.messageId == '529' and self.packagemanager=="snap":
                 # Software Update with type
                 # When multiple operations received just take the first one for further processing
                 #self.logger.debug("message received :" + str(message.values))
@@ -225,6 +228,7 @@ class SoftwareManager(Listener, Initializer):
                         binary_included = True
                 installedSoftware = self.getFormatedSnaps()
                 errors = self.installSnap(softwareToInstall)
+                self.logger.debug("---------------------")
                 self.logger.debug(f'Installing the following packages: {installed_software}')
                 for software in installedSoftware:
                     self.logger.info(f'Software processed: {software}')
@@ -250,7 +254,7 @@ class SoftwareManager(Listener, Initializer):
                 #    self.apt_package_manager.getInstalledSoftware(False))
                 
                 
-            if 's/ds' in message.topic and message.messageId == '516' and packagemanager=="apt":
+            if 's/ds' in message.topic and message.messageId == '516' and self.packagemanager=="apt":
                 # When multiple operations received just take the first one for further processing
                 #self.logger.debug("message received :" + str(message.values))
                 messages = self.group(message.values, '\n')[0]
@@ -281,7 +285,7 @@ class SoftwareManager(Listener, Initializer):
                 self.agent.publishMessage(
                     self.apt_package_manager.getInstalledSoftware(False))
                 
-            if 's/ds' in message.topic and message.messageId == '516' and packagemanager=="snap":
+            if 's/ds' in message.topic and message.messageId == '516' and self.packagemanager=="snap":
                 # When multiple operations received just take the first one for further processing
                 #self.logger.debug("message received :" + str(message.values))
                 messages = self.group(message.values, '\n')[0]
@@ -341,7 +345,10 @@ class SoftwareManager(Listener, Initializer):
         return []
 
     def getMessages(self):
-        installed_software = self.apt_package_manager.get_installed_software_json(False)
+        if self.packagemanager == "apt": 
+            installed_software = self.apt_package_manager.get_installed_software_json(False)
+        elif self.packagemanager == "snap":
+            installed_software = self.getInstalledSnaps()
         if self.agent.token_received.wait(timeout=self.agent.refresh_token_interval):
             mo_id = self.agent.rest_client.get_internal_id(self.agent.serial)
             #self.agent.rest_client.update_managed_object(mo_id, json.dumps(installed_software))
@@ -353,7 +360,6 @@ class SoftwareManager(Listener, Initializer):
         snapd = self.agent.snapdClient
         installedSnaps = snapd.getInstalledSnaps()
         allInstalled = {}
-
         for snap in installedSnaps['result']:
             allInstalled[snap['name']] = {
                 'version': snap['version'],
