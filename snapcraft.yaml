@@ -1,4 +1,4 @@
-name: c8y-devicemanagenent-agent
+name: cumulocity-devicemanagement-agent
 version: '1'
 summary: Cumulocity Cloud Connector
 description: |
