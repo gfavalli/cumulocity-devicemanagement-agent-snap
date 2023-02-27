@@ -231,7 +231,6 @@ class SoftwareManager(Listener, Initializer):
                 errors = self.installSnap(softwareToInstall)
                 self.logger.debug("---------------------")
                 self.logger.debug(f'Following packages are installed: {installedSoftware}')
-                self.logger.debug(f'Type is: {type(installedSoftware)}')
                 for software in installedSoftware:
                     self.logger.info(f'Software processed: {software}')
                     name = software
@@ -345,7 +344,7 @@ class SoftwareManager(Listener, Initializer):
         if self.packagemanager == "apt": 
             installed_software = self.apt_package_manager.get_installed_software_json(False)
         elif self.packagemanager == "snap":
-            installed_software = self.getInstalledSnaps()
+            installed_software = self.getFormatedSnaps()
         if self.agent.token_received.wait(timeout=self.agent.refresh_token_interval):
             mo_id = self.agent.rest_client.get_internal_id(self.agent.serial)
             #self.agent.rest_client.update_managed_object(mo_id, json.dumps(installed_software))
@@ -369,7 +368,6 @@ class SoftwareManager(Listener, Initializer):
         installedSnaps = snapd.getInstalledSnaps()
         logging.debug(installedSnaps)
         allInstalled = []
-
         for snap in installedSnaps['result']:
             snapInfo = []
             # Name
