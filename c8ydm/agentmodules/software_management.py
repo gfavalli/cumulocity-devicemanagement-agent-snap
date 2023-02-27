@@ -227,10 +227,8 @@ class SoftwareManager(Listener, Initializer):
                     if 'binaries' in url:
                         # File provided
                         binary_included = True
-                
                 errors = self.installSnap(softwareToInstall)
                 self.logger.debug("---------------------")
-                self.logger.debug(f'Following packages are installed: {installedSoftware}')
                 for software in softwareToInstall:
                     self.logger.info(f'Software processed: {software}')
                     name = software
@@ -250,7 +248,6 @@ class SoftwareManager(Listener, Initializer):
                 self.agent.publishMessage(finished)
                 #self.agent.publishMessage(
                 #    self.apt_package_manager.getInstalledSoftware(False))
-                
                 
             if 's/ds' in message.topic and message.messageId == '516' and self.packagemanager=="apt":
                 # When multiple operations received just take the first one for further processing
@@ -378,9 +375,9 @@ class SoftwareManager(Listener, Initializer):
             # Name
             snapInfo.append(snap['name'])
             # Version
-            snapInfo.append(snap['version'] + '##' + snap['channel'])
+            snapInfo.append(snap['version'] + ' - ' + snap['channel'])
             # URL
-            snapInfo.append('')
+            snapInfo.append(' ')
             allInstalled.extend(snapInfo)
         return SmartRESTMessage('s/us', '116', allInstalled)
     
