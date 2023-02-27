@@ -425,7 +425,7 @@ class SoftwareManager(Listener, Initializer):
                         logging.debug('Finished snap ' + name)
                         if changeStatus['error']:
                             errors.append(changeStatus['error'])
-            elif action == "remove":
+            elif action == "delete":
                 # try remove
                     logging.info('Remove snap "%s" with channel "%s"', name, channel)
                     if response['status-code'] >= 400:
