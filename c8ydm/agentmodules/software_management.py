@@ -343,13 +343,14 @@ class SoftwareManager(Listener, Initializer):
     def getMessages(self):
         if self.packagemanager == "apt": 
             installed_software = self.apt_package_manager.get_installed_software_json(False)
+            if self.agent.token_received.wait(timeout=self.agent.refresh_token_interval):
+                mo_id = self.agent.rest_client.get_internal_id(self.agent.serial)
+                #self.agent.rest_client.update_managed_object(mo_id, json.dumps(installed_software))
+                self.agent.rest_client.set_adv_software_list(mo_id, installed_software)
+            #return self.apt_package_manager.getInstalledSoftware(True)
         elif self.packagemanager == "snap":
-            installed_software = self.getFormatedSnaps()
-        if self.agent.token_received.wait(timeout=self.agent.refresh_token_interval):
-            mo_id = self.agent.rest_client.get_internal_id(self.agent.serial)
-            #self.agent.rest_client.update_managed_object(mo_id, json.dumps(installed_software))
-            self.agent.rest_client.set_adv_software_list(mo_id, installed_software)
-        #return self.apt_package_manager.getInstalledSoftware(True)
+            installed_software = self.getInstalledSnaps()
+            self.agent.publishMessage(installed_software)
         return None
     
     def getFormatedSnaps(self):
@@ -359,9 +360,13 @@ class SoftwareManager(Listener, Initializer):
         for snap in installedSnaps['result']:
             allInstalled[snap['name']] = {
                 'version': snap['version'],
-                'channel': snap['channel']
+                'channel': snap['channel'],
+                'softwareType': 'snap',
+                'url': ' '
             }
         return allInstalled
+
+
     
     def getInstalledSnaps(self):
         snapd = self.agent.snapdClient
@@ -377,7 +382,6 @@ class SoftwareManager(Listener, Initializer):
             # URL
             snapInfo.append('')
             allInstalled.extend(snapInfo)
-
         return SmartRESTMessage('s/us', '116', allInstalled)
     
     def installSnap(self, toBeInstalled):
