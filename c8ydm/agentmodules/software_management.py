@@ -431,3 +431,16 @@ class SoftwareManager(Listener, Initializer):
             else:
                 pass
         return errors
+    
+    def getChangeStatus(self, changeId):
+        snapd = self.agent.snapdClient
+        changeStatus = snapd.getChangeStatus(changeId)
+        error = None
+        finished = changeStatus['result']['status'] == 'Done'
+        if not finished and changeStatus['result']['status'] == 'Error':
+            finished = True
+            error = changeStatus['result']['err']
+        return {
+            'finished': finished,
+            'error': error
+        }
