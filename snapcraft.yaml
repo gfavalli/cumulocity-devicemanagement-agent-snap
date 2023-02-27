@@ -12,9 +12,8 @@ architectures:
 parts:
   c8ydm:
     plugin: python
-    python-version: python3
     source: .
-    requirements:
+    python-requirements:
       - requirements.txt
 apps:
   c8ydm-start:
