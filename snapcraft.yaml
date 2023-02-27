@@ -15,11 +15,11 @@ parts:
       - requirements.txt
 apps:
   c8ydm-start:
-    command: bin/c8ydm
+    command: c8ydm
   c8ydm-stop:
-    command: bin/c8ydm.stop
+    command: c8ydm.stop
   c8ydm:
-    command: bin/c8ydm
+    command: c8ydm
     daemon: simple
     restart-condition: always
-    stop-command: bin/c8ydm.stop
+    stop-command: c8ydm.stop
