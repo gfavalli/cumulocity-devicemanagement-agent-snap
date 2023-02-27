@@ -98,7 +98,7 @@ class SoftwareManager(Listener, Initializer):
                 if not binary_included:
                     [errors, software_installed] = self.apt_package_manager.install_software(
                         softwareToInstall, True, False)
-                    self.logger.info('Finished all software update')
+
                     if len(errors) == 0:
                         # finished without errors
                         finished = SmartRESTMessage(
@@ -397,47 +397,39 @@ class SoftwareManager(Listener, Initializer):
                 if response['status-code'] >= 400:
                     logging.error('Snap %s error: %s', name, response['result']['message'])
                     errors.append('Snap' + name + ' error: ' + response['result']['message'])
-                elif response['status-code'] == 202:
+                elif response['status-code'] == 202 or response['status-code']== 200 or response['status-code']  == 201:
                     changeId = response['change']
                     changeStatus = self.getChangeStatus(changeId)
                     while not changeStatus['finished']:
                         time.sleep(3)
                         changeStatus = self.getChangeStatus(changeId)
                     logging.debug('Finished snap ' + name)
-                    self.agent.publishMessage(SmartRESTMessage('s/us', '141', [name, toBeVersion, type, ' ']))
+                    self.agent.publishMessage(SmartRESTMessage('s/us', '141', [name, toBeVersion, 'version', ' ']))
                     if changeStatus['error']:
                         errors.append(changeStatus['error'])
             elif action == "update":
                 # try update
                     logging.info('Update snap "%s" with channel "%s"', name, channel)
-                    if name == 'c8ycc':
-                        response = snapd.updateSnap(name, channel, devmode=True, classic=False)
-                    else:
-                        response = snapd.updateSnap(name, channel)
                     if response['status-code'] >= 400:
                         logging.error('Snap %s error: %s', name, response['result']['message'])
                         errors.append('Snap' + name + ' error: ' + response['result']['message'])
-                    elif response['status-code'] == 202:
+                    elif response['status-code'] == 202 or response['status-code']== 200 or response['status-code']  == 201:
                         changeId = response['change']
                         changeStatus = self.getChangeStatus(changeId)
                         while not changeStatus['finished']:
                             time.sleep(3)
                             changeStatus = self.getChangeStatus(changeId)
                         logging.debug('Finished snap ' + name)
-                        self.agent.publishMessage(SmartRESTMessage('s/us', '141', [name, toBeVersion, type, ' ']))
+                        self.agent.publishMessage(SmartRESTMessage('s/us', '141', [name, toBeVersion, 'snap', ' ']))
                         if changeStatus['error']:
                             errors.append(changeStatus['error'])
             elif action == "remove":
                 # try remove
                     logging.info('Remove snap "%s" with channel "%s"', name, channel)
-                    if name == 'c8ycc':
-                        response = snapd.deleteSnap(name, channel, devmode=True, classic=False)
-                    else:
-                        response = snapd.deleteSnap(name, channel)
                     if response['status-code'] >= 400:
                         logging.error('Snap %s error: %s', name, response['result']['message'])
                         errors.append('Snap' + name + ' error: ' + response['result']['message'])
-                    elif response['status-code'] == 202:
+                    elif response['status-code'] == 202 or response['status-code']== 200 or response['status-code']  == 201:
                         changeId = response['change']
                         changeStatus = self.getChangeStatus(changeId)
                         while not changeStatus['finished']:
