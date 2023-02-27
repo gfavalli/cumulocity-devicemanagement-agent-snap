@@ -237,10 +237,6 @@ class SoftwareManager(Listener, Initializer):
                     name = software
                     type = 'snap'
                     version = software[0]
-                    if action == 'install' or action == 'update':
-                        self.agent.publishMessage(SmartRESTMessage('s/us', '141', [name, version, type, 'test']))
-                    if action == 'delete':
-                        self.agent.publishMessage(SmartRESTMessage('s/us', '142', [name, version]))
                 self.logger.info('Finished all software update')
                 if len(errors) == 0:
                     # finished without errors
@@ -410,6 +406,7 @@ class SoftwareManager(Listener, Initializer):
                         time.sleep(3)
                         changeStatus = self.getChangeStatus(changeId)
                     logging.debug('Finished snap ' + name)
+                    self.agent.publishMessage(SmartRESTMessage('s/us', '141', [name, toBeVersion, type, ' ']))
                     if changeStatus['error']:
                         errors.append(changeStatus['error'])
             elif action == "update":
@@ -429,10 +426,29 @@ class SoftwareManager(Listener, Initializer):
                             time.sleep(3)
                             changeStatus = self.getChangeStatus(changeId)
                         logging.debug('Finished snap ' + name)
+                        self.agent.publishMessage(SmartRESTMessage('s/us', '141', [name, toBeVersion, type, ' ']))
                         if changeStatus['error']:
                             errors.append(changeStatus['error'])
             elif action == "remove":
-                pass
+                # try remove
+                    logging.info('Remove snap "%s" with channel "%s"', name, channel)
+                    if name == 'c8ycc':
+                        response = snapd.deleteSnap(name, channel, devmode=True, classic=False)
+                    else:
+                        response = snapd.deleteSnap(name, channel)
+                    if response['status-code'] >= 400:
+                        logging.error('Snap %s error: %s', name, response['result']['message'])
+                        errors.append('Snap' + name + ' error: ' + response['result']['message'])
+                    elif response['status-code'] == 202:
+                        changeId = response['change']
+                        changeStatus = self.getChangeStatus(changeId)
+                        while not changeStatus['finished']:
+                            time.sleep(3)
+                            changeStatus = self.getChangeStatus(changeId)
+                        logging.debug('Finished snap ' + name)
+                        self.agent.publishMessage(SmartRESTMessage('s/us', '142', [name, toBeVersion]))
+                        if changeStatus['error']:
+                            errors.append(changeStatus['error'])
             else:
                 pass
         return errors
