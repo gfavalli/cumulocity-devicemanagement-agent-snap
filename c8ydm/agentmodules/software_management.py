@@ -230,13 +230,13 @@ class SoftwareManager(Listener, Initializer):
                 installedSoftware = self.getFormatedSnaps()
                 errors = self.installSnap(softwareToInstall)
                 self.logger.debug("---------------------")
-                self.logger.debug(f'Installing the following packages: {installedSoftware}')
+                self.logger.debug(f'Following packages are installed: {installedSoftware}')
+                self.logger.debug(f'Type is: {type(installedSoftware)}')
                 for software in installedSoftware:
                     self.logger.info(f'Software processed: {software}')
-                    action = software['action']
-                    name = software['name']
-                    type = software['type']
-                    version = software['version']
+                    name = software
+                    type = 'snap'
+                    version = software[0]
                     if action == 'install' or action == 'update':
                         self.agent.publishMessage(SmartRESTMessage('s/us', '141', [name, version, type, 'test']))
                     if action == 'delete':
