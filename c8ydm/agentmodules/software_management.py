@@ -230,7 +230,7 @@ class SoftwareManager(Listener, Initializer):
                 installedSoftware = self.getFormatedSnaps()
                 errors = self.installSnap(softwareToInstall)
                 self.logger.debug("---------------------")
-                self.logger.debug(f'Installing the following packages: {installed_software}')
+                self.logger.debug(f'Installing the following packages: {installedSoftware}')
                 for software in installedSoftware:
                     self.logger.info(f'Software processed: {software}')
                     action = software['action']
