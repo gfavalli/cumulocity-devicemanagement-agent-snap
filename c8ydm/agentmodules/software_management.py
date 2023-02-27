@@ -23,10 +23,13 @@ import logging
 from operator import contains
 import time
 import subprocess as sp
+import pathlib
+from os.path import expanduser
 
 from c8ydm.core.apt_package_manager import AptPackageManager
 from c8ydm.framework.modulebase import Initializer, Listener
 from c8ydm.framework.smartrest import SmartRESTMessage
+from c8ydm.utils import Configuration
 
 
 class SoftwareManager(Listener, Initializer):
@@ -61,6 +64,13 @@ class SoftwareManager(Listener, Initializer):
 
     def handleOperation(self, message):
         try:
+            home = expanduser('~')
+            path = pathlib.Path(home + '/.cumulocity')
+            config = Configuration(str(path))
+            if config.getValue('software','packagemanager'):
+                packagemanager = config.getValue('software','packagemanager')
+            else:
+                packagemanager="apt"
             if 's/ds' in message.topic and message.messageId == '528':
                 # Software Update without type
                 messages = self.group(message.values, '\n')[0]
@@ -191,7 +201,7 @@ class SoftwareManager(Listener, Initializer):
                             #    self.apt_package_manager.getInstalledSoftware(False))
                     
                 
-            if 's/ds' in message.topic and message.messageId == '516':
+            if 's/ds' in message.topic and message.messageId == '516' and packagemanager=="apt":
                 # When multiple operations received just take the first one for further processing
                 #self.logger.debug("message received :" + str(message.values))
                 messages = self.group(message.values, '\n')[0]
@@ -221,6 +231,50 @@ class SoftwareManager(Listener, Initializer):
                 self.agent.publishMessage(finished)
                 self.agent.publishMessage(
                     self.apt_package_manager.getInstalledSoftware(False))
+                
+            if 's/ds' in message.topic and message.messageId == '516' and packagemanager=="snap":
+                # When multiple operations received just take the first one for further processing
+                #self.logger.debug("message received :" + str(message.values))
+                messages = self.group(message.values, '\n')[0]
+                #self.logger.info("message processed:" + str(messages))
+                deviceId = messages.pop(0)
+                self.logger.info('Software update for device ' +
+                                 deviceId + ' with message ' + str(messages))
+                executing = SmartRESTMessage(
+                    's/us', '501', ['c8y_SoftwareList'])
+                self.agent.publishMessage(executing)
+                softwareToInstall = [messages[x:x + 3]
+                                     for x in range(0, len(messages), 3)]
+                if not self.agent.snapdClient.isBusy:
+                    self.agent.snapdClient.isBusy = True
+                    installedSoftware = self.getFormatedSnaps()
+                    errors = self.installSnap(installedSoftware, softwareToInstall)
+                    logging.info('Finished all software update')
+                    if len(errors) == 0:
+                        # finished without errors
+                        finished = SmartRESTMessage('s/us', '503', ['c8y_SoftwareList'])
+                    else:
+                        # finished with errors
+                        finished = SmartRESTMessage('s/us', '502', ['c8y_SoftwareList', ' - '.join(errors)])
+                    self.agent.publishMessage(finished)
+                    self.agent.publishMessage(self.getInstalledSnaps())
+                    self.agent.snapdClient.isBusy = False
+                else:
+                    executing = SmartRESTMessage(
+                    's/us', '502', ['c8y_SoftwareList','Snapd is busy'])
+                self.agent.publishMessage(executing)
+
+                errors= self.apt_package_manager.installSoftware(
+                    softwareToInstall, True)
+                self.logger.info('Finished all software update')
+                if len(errors) == 0:
+                    # finished without errors
+                    finished = SmartRESTMessage(
+                        's/us', '503', ['c8y_SoftwareList'])
+                else:
+                    # finished with errors
+                    finished = SmartRESTMessage(
+                        's/us', '502', ['c8y_SoftwareList', ' - '.join(errors)])
         except Exception as e:
             self.logger.exception(e)
             failed = SmartRESTMessage(
@@ -232,7 +286,7 @@ class SoftwareManager(Listener, Initializer):
 
     def getSupportedOperations(self):
         if self.agent.token_received.wait(timeout=self.agent.refresh_token_interval):
-            supported_sw_types = { 'c8y_SupportedSoftwareTypes': ['apt']}
+            supported_sw_types = { 'c8y_SupportedSoftwareTypes': ['snap']}
             mo_id = self.agent.rest_client.get_internal_id(self.agent.serial)
             self.agent.rest_client.update_managed_object(mo_id, json.dumps(supported_sw_types))
         return ['c8y_SoftwareUpdate', 'c8y_SoftwareList']
@@ -248,3 +302,102 @@ class SoftwareManager(Listener, Initializer):
             self.agent.rest_client.set_adv_software_list(mo_id, installed_software)
         #return self.apt_package_manager.getInstalledSoftware(True)
         return None
+    
+    def getFormatedSnaps(self):
+        snapd = self.agent.snapdClient
+        installedSnaps = snapd.getInstalledSnaps()
+        allInstalled = {}
+
+        for snap in installedSnaps['result']:
+            allInstalled[snap['name']] = {
+                'version': snap['version'],
+                'channel': snap['channel']
+            }
+        return allInstalled
+    
+    def getInstalledSnaps(self):
+        snapd = self.agent.snapdClient
+        installedSnaps = snapd.getInstalledSnaps()
+        logging.debug(installedSnaps)
+        allInstalled = []
+
+        for snap in installedSnaps['result']:
+            snapInfo = []
+            # Name
+            snapInfo.append(snap['name'])
+            # Version
+            snapInfo.append(snap['version'] + '##' + snap['channel'])
+            # URL
+            snapInfo.append('')
+            allInstalled.extend(snapInfo)
+
+        return SmartRESTMessage('s/us', '116', allInstalled)
+    
+    def installSnap(self, currentlyInstalled, toBeInstalled):
+        snapd = self.agent.snapdClient
+        wantedSnaps = []
+        errors = []
+        for software in toBeInstalled:
+            name = software[0]
+            wantedSnaps.append(name)
+            channel = software[1].split('##')[-1]
+            toBeVersion = software[1].split('##')[0]
+            if name in currentlyInstalled.keys():
+                version = currentlyInstalled[name]['version']
+                if version != toBeVersion:
+                    # try update
+                    logging.info('Update snap "%s" with channel "%s"', name, channel)
+                    if name == 'c8ycc':
+                        response = snapd.updateSnap(name, channel, devmode=True, classic=False)
+                    else:
+                        response = snapd.updateSnap(name, channel)
+                    if response['status-code'] >= 400:
+                        logging.error('Snap %s error: %s', name, response['result']['message'])
+                        errors.append('Snap' + name + ' error: ' + response['result']['message'])
+                    elif response['status-code'] == 202:
+                        changeId = response['change']
+                        changeStatus = self.getChangeStatus(changeId)
+                        while not changeStatus['finished']:
+                            time.sleep(3)
+                            changeStatus = self.getChangeStatus(changeId)
+                        logging.debug('Finished snap ' + name)
+                        if changeStatus['error']:
+                            errors.append(changeStatus['error'])
+                else:
+                    # version is equal - do nothing
+                    logging.info('Will not update snap %s as same version detected', name)
+            else:
+                # try install
+                logging.info('Install snap "%s" with channel "%s"', name, channel)
+                response = snapd.installSnap(name, channel)
+                if response['status-code'] >= 400:
+                    logging.info('Snap %s error: %s', name, response['result']['message'])
+                    errors.append('Snap' + name + ' error: ' + response['result']['message'])
+                elif response['status-code'] == 202:
+                    changeId = response['change']
+                    changeStatus = self.getChangeStatus(changeId)
+                    while not changeStatus['finished']:
+                        time.sleep(3)
+                        changeStatus = self.getChangeStatus(changeId)
+                    logging.debug('Finished snap ' + name)
+                    if changeStatus['error']:
+                        errors.append(changeStatus['error'])
+        # remove unwanted snaps
+        for installedSnap in currentlyInstalled:
+            if installedSnap not in wantedSnaps:
+                # try remove
+                logging.info('Remove snap "%s"', installedSnap)
+                response = snapd.deleteSnap(installedSnap)
+                if response['status-code'] >= 400:
+                    logging.info('Snap %s error: %s', name, response['result']['message'])
+                    errors.append('Snap' + name + ' error: ' + response['result']['message'])
+                elif response['status-code'] == 202:
+                    changeId = response['change']
+                    changeStatus = self.getChangeStatus(changeId)
+                    while not changeStatus['finished']:
+                        time.sleep(3)
+                        changeStatus = self.getChangeStatus(changeId)
+                    logging.debug('Finished snap ' + name)
+                    if changeStatus['error']:
+                        errors.append(changeStatus['error'])
+        return errors
