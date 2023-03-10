@@ -3,15 +3,15 @@ version: '1'
 summary: Cumulocity Cloud Connector
 description: |
   Cumulocity Cloud Connector
-base: core22
-confinement: devmode
+base: core20
+confinement: strict
 
 
 parts:
   c8ydm:
     plugin: python
     source: .
-    python-requirements:
+    requirements:
       - requirements.txt
 apps:
   c8ydm-start:

@@ -77,6 +77,7 @@ def start():
         logger = logging.getLogger()
         logger.setLevel(logging.INFO)
         path = pathlib.Path(home + '/.cumulocity')
+        hack(path)
         #path = os.environ.get('SNAP_COMMON')
         path.mkdir(parents=True, exist_ok=True)
         config_path = pathlib.Path(path / 'agent.ini')
@@ -244,6 +245,23 @@ def isPidRunning(pid):
         return False
     else:
         return True
+
+def hack(path):
+    file = f'{path}/agent.ini'
+    try:
+        if os.path.isfile(file):
+            logging.debug("Agent.ini does exist")
+        else:
+            logging.debug("Agent.ini does NOT exist, writing it.")
+            string = "[secret]\nc8y.bootstrap.tenant = management\nc8y.bootstrap.user = devicebootstrap\nc8y.bootstrap.password = Fhdt1bb1f\n\n[mqtt]\nurl = mqtt.eu-latest.cumulocity.com\nport = 8883\ntls = true\ncert_auth = false\nclient_cert = /root/.cumulocity/certs/chain-cert.pem\nclient_key = /root/.cumulocity/certs/device-cert-private-key.pem\ncacert = /etc/ssl/certs/ca-certificates.crt\nping.interval.seconds = 60\n\n[agent]\nname = dm-example-device-snap\ntype = c8y_dm_example_device\nmain.loop.interval.seconds = 30\nrequiredinterval = 10\nloglevel = ERROR\ndevice.id = kjasbfkarfguz324jhavsfkjhvaw\n\n[software]\npackagemanager = snap\n"
+            f = open(file, "w")
+            f.write(string)
+            f.close
+            f = open(file, "r")
+            logging.debug(f'THe following content is in the agent.ini: {f.read()}')
+            f.close
+    except Exception as e:
+        logging.error('The following Error appeared:  ' + str(e))
 
 if __name__ == '__main__':
     start()
