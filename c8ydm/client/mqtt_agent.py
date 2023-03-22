@@ -28,7 +28,6 @@ import c8ydm.utils.moduleloader as moduleloader
 from c8ydm.client.rest_client import RestClient
 from c8ydm.core.configuration import ConfigurationManager
 from c8ydm.framework.smartrest import SmartRESTMessage
-from c8ydm.utils.snapd_client import SnapdClient
 
 
 class Agent():
@@ -67,7 +66,7 @@ class Agent():
         self.token = None
         self.is_connected = False
         self.rest_client = RestClient(self)
-        self.snapdClient = SnapdClient()
+        
         if self.simulated:
             self.model = 'docker'
         else:

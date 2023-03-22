@@ -20,6 +20,7 @@ limitations under the License.
 import logging
 import platform
 import distro
+from c8ydm.framework.packagemanager import PackageManager
 from c8ydm.framework.smartrest import SmartRESTMessage
 
 if 'Linux' == platform.system() and distro.id() in ['debian','ubuntu','raspbian']:
@@ -27,13 +28,13 @@ if 'Linux' == platform.system() and distro.id() in ['debian','ubuntu','raspbian'
 else:
     apt = None
 
-class AptPackageManager:
+class AptPackageManager(PackageManager):
     logger = logging.getLogger(__name__)
     
     """
     DEPRECATED - will probably hit the 16 KB payload limit size of MQTT when used.
     """
-    def getInstalledSoftware(self, with_update):
+    def get_installed_software(self, with_update):
         allInstalled = []
         if apt:
             cache = apt.cache.Cache()
@@ -84,7 +85,7 @@ class AptPackageManager:
         return software_list
 
     
-    def install_software(self, software_to_install, with_update, with_type):
+    def install_software(self, software_to_install, with_update):
         errors = []
         software_installed = []
         try:
@@ -96,18 +97,10 @@ class AptPackageManager:
                     self.logger.info('apt update finished!')
                 cache.open()
                 for software in software_to_install:
-                
-                    if with_type:
-                        name = software[0]
-                        version = software[1]
-                        #type = software[2]
-                        #url = software[3]
-                        action = software[4]
-                    else:
-                        name = software[0]
-                        version = software[1]
-                        #url = software[2]
-                        action = software[3]
+                    name = software[0]
+                    version = software[1]
+                    #url = software[2]
+                    action = software[3]
                     pkg = cache[name]
                     if pkg is None:
                         errors.append('No Software found with name '+ name)

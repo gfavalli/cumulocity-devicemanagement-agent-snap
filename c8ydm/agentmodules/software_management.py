@@ -27,6 +27,7 @@ import pathlib
 from os.path import expanduser
 
 from c8ydm.core.apt_package_manager import AptPackageManager
+from c8ydm.core.snap_package_manager import SnapDPackageManager
 from c8ydm.framework.modulebase import Initializer, Listener
 from c8ydm.framework.smartrest import SmartRESTMessage
 from c8ydm.utils import Configuration
@@ -35,17 +36,21 @@ from c8ydm.utils import Configuration
 class SoftwareManager(Listener, Initializer):        
     """ Software Update Module"""
     logger = logging.getLogger(__name__)
-    apt_package_manager = AptPackageManager()        
+    
+    package_manager = AptPackageManager()   
 
+    
     def __init__(self,serial, agent):
         super().__init__(serial, agent)
         home = expanduser('~')
         path = pathlib.Path(home + '/.cumulocity')
         config = Configuration(str(path))
         if config.getValue('software','packagemanager'):
-            self.packagemanager = config.getValue('software','packagemanager')
+            self.config_package_manager = config.getValue('software','packagemanager')
+            if self.config_package_manager == 'snap':
+                self.package_manager = SnapDPackageManager()
         else:
-            self.packagemanager="apt"
+            self.config_package_manager = 'apt'
 
     def group(self, seq, sep):
         result = [[]]
@@ -74,7 +79,6 @@ class SoftwareManager(Listener, Initializer):
 
     def handleOperation(self, message):
         try:
-            
             if 's/ds' in message.topic and message.messageId == '528':
                 # Software Update without type
                 messages = self.group(message.values, '\n')[0]
@@ -96,8 +100,8 @@ class SoftwareManager(Listener, Initializer):
                         # File provided
                         binary_included = True
                 if not binary_included:
-                    [errors, software_installed] = self.apt_package_manager.install_software(
-                        softwareToInstall, True, False)
+                    [errors, software_installed] = self.package_manager.install_software(
+                        softwareToInstall, True)
 
                     if len(errors) == 0:
                         # finished without errors
@@ -109,7 +113,7 @@ class SoftwareManager(Listener, Initializer):
                             's/us', '502', ['c8y_SoftwareUpdate', ' - '.join(errors)])
                     self.agent.publishMessage(finished)
                     if self.agent.token_received.wait(timeout=self.agent.refresh_token_interval):
-                        installed_software = self.apt_package_manager.get_installed_software_json(False)
+                        installed_software = self.package_manager.get_installed_software_json(False)
                         mo_id = self.agent.rest_client.get_internal_id(self.agent.serial)
                         self.agent.rest_client.update_managed_object(mo_id, json.dumps(installed_software))
                 else:
@@ -130,12 +134,12 @@ class SoftwareManager(Listener, Initializer):
                                 's/us', '503', ['c8y_SoftwareUpdate'])
                             self.agent.publishMessage(finished)
                         if self.agent.token_received.wait(timeout=self.agent.refresh_token_interval):
-                            installed_software = self.apt_package_manager.get_installed_software_json(False)
+                            installed_software = self.package_manager.get_installed_software_json(False)
                             mo_id = self.agent.rest_client.get_internal_id(self.agent.serial)
                             self.agent.rest_client.update_managed_object(mo_id, json.dumps(installed_software))
                                 
 
-            if 's/ds' in message.topic and message.messageId == '529' and self.packagemanager=="apt":
+            if 's/ds' in message.topic and message.messageId == '529':
                 # Software Update with type
                 # When multiple operations received just take the first one for further processing
                 #self.logger.debug("message received :" + str(message.values))
@@ -159,8 +163,8 @@ class SoftwareManager(Listener, Initializer):
                         # File provided
                         binary_included = True
                 if not binary_included:
-                    [errors, software_installed] = self.apt_package_manager.install_software(
-                        softwareToInstall, True, True)
+                    [errors, software_installed] = self.package_manager.install_software(
+                        softwareToInstall, True)
                     for software in software_installed:
                         self.logger.info(f'Software processed: {software}')
                         action = software['action']
@@ -204,52 +208,7 @@ class SoftwareManager(Listener, Initializer):
                             #self.agent.publishMessage(
                             #    self.apt_package_manager.getInstalledSoftware(False))
             
-            if 's/ds' in message.topic and message.messageId == '529' and self.packagemanager=="snap":
-                # Software Update with type
-                # When multiple operations received just take the first one for further processing
-                #self.logger.debug("message received :" + str(message.values))
-                messages = self.group(message.values, '\n')[0]
-                deviceId = messages.pop(0)
-                binary_included = False
-                self.logger.info('Software update for device ' +
-                                 deviceId + ' with message ' + str(messages))
-                executing = SmartRESTMessage(
-                    's/us', '501', ['c8y_SoftwareUpdate'])
-                self.agent.publishMessage(executing)
-                softwareToInstall = [messages[x:x + 5]
-                                     for x in range(0, len(messages), 5)]
-                for software in softwareToInstall:
-                    name = software[0]
-                    version = software[1]
-                    type = software[2]
-                    url = software[3]
-                    action = software[4]
-                    if 'binaries' in url:
-                        # File provided
-                        binary_included = True
-                errors = self.installSnap(softwareToInstall)
-                self.logger.debug("---------------------")
-                for software in softwareToInstall:
-                    self.logger.info(f'Software processed: {software}')
-                    name = software
-                    type = 'snap'
-                    version = software[0]
-                self.logger.info('Finished all software update')
-                self.logger.debug("Sending all installed software via mqtt")
-                self.agent.publishMessage(self.getInstalledSnaps())
-                if len(errors) == 0:
-                    # finished without errors
-                    finished = SmartRESTMessage(
-                        's/us', '503', ['c8y_SoftwareUpdate'])
-                else:
-                    # finished with errors
-                    finished = SmartRESTMessage(
-                        's/us', '502', ['c8y_SoftwareUpdate', ' - '.join(errors)])
-                self.agent.publishMessage(finished)
-                #self.agent.publishMessage(
-                #    self.apt_package_manager.getInstalledSoftware(False))
-                
-            if 's/ds' in message.topic and message.messageId == '516' and self.packagemanager=="apt":
+            if 's/ds' in message.topic and message.messageId == '516':
                 # When multiple operations received just take the first one for further processing
                 #self.logger.debug("message received :" + str(message.values))
                 messages = self.group(message.values, '\n')[0]
@@ -262,7 +221,7 @@ class SoftwareManager(Listener, Initializer):
                 self.agent.publishMessage(executing)
                 softwareToInstall = [messages[x:x + 3]
                                      for x in range(0, len(messages), 3)]
-                errors= self.apt_package_manager.installSoftware(
+                errors = self.package_manager.install_software(
                     softwareToInstall, True)
                 self.logger.info('Finished all software update')
                 if len(errors) == 0:
@@ -273,53 +232,13 @@ class SoftwareManager(Listener, Initializer):
                     # finished with errors
                     finished = SmartRESTMessage(
                         's/us', '502', ['c8y_SoftwareList', ' - '.join(errors)])
-                installed_software = self.apt_package_manager.get_installed_software_json(False)
+                installed_software = self.package_manager.get_installed_software_json(False)
                 mo_id = self.agent.rest_client.get_internal_id(self.agent.serial)
                 self.agent.rest_client.update_managed_object(mo_id, json.dumps(installed_software))
                 self.agent.publishMessage(finished)
                 self.agent.publishMessage(
-                    self.apt_package_manager.getInstalledSoftware(False))
+                    self.package_manager.get_installed_software(False))
                 
-            if 's/ds' in message.topic and message.messageId == '516' and self.packagemanager=="snap":
-                # When multiple operations received just take the first one for further processing
-                #self.logger.debug("message received :" + str(message.values))
-                messages = self.group(message.values, '\n')[0]
-                #self.logger.info("message processed:" + str(messages))
-                deviceId = messages.pop(0)
-                self.logger.info('Software update for device ' +
-                                 deviceId + ' with message ' + str(messages))
-                executing = SmartRESTMessage(
-                    's/us', '501', ['c8y_SoftwareList'])
-                self.agent.publishMessage(executing)
-                softwareToInstall = [messages[x:x + 3]
-                                     for x in range(0, len(messages), 3)]
-                if not self.agent.snapdClient.isBusy:
-                    self.agent.snapdClient.isBusy = True
-                    installedSoftware = self.getFormatedSnaps()
-                    errors = self.installSnap(installedSoftware, softwareToInstall)
-                    logging.info('Finished all software update')
-                    if len(errors) == 0:
-                        # finished without errors
-                        finished = SmartRESTMessage('s/us', '503', ['c8y_SoftwareList'])
-                    else:
-                        # finished with errors
-                        finished = SmartRESTMessage('s/us', '502', ['c8y_SoftwareList', ' - '.join(errors)])
-                    self.agent.publishMessage(finished)
-                    self.agent.publishMessage(self.getInstalledSnaps())
-                    self.agent.snapdClient.isBusy = False
-                else:
-                    executing = SmartRESTMessage(
-                    's/us', '502', ['c8y_SoftwareList','Snapd is busy'])
-                self.agent.publishMessage(executing)
-                self.logger.info('Finished all software update')
-                if len(errors) == 0:
-                    # finished without errors
-                    finished = SmartRESTMessage(
-                        's/us', '503', ['c8y_SoftwareList'])
-                else:
-                    # finished with errors
-                    finished = SmartRESTMessage(
-                        's/us', '502', ['c8y_SoftwareList', ' - '.join(errors)])
         except Exception as e:
             self.logger.exception(e)
             failed = SmartRESTMessage(
@@ -331,7 +250,10 @@ class SoftwareManager(Listener, Initializer):
 
     def getSupportedOperations(self):
         if self.agent.token_received.wait(timeout=self.agent.refresh_token_interval):
-            supported_sw_types = { 'c8y_SupportedSoftwareTypes': ['snap']}
+            if self.config_package_manager == 'apt':
+                supported_sw_types = { 'c8y_SupportedSoftwareTypes': ['apt']}
+            else:
+                supported_sw_types = { 'c8y_SupportedSoftwareTypes': ['snap']}
             mo_id = self.agent.rest_client.get_internal_id(self.agent.serial)
             self.agent.rest_client.update_managed_object(mo_id, json.dumps(supported_sw_types))
         return ['c8y_SoftwareUpdate', 'c8y_SoftwareList']
@@ -340,121 +262,10 @@ class SoftwareManager(Listener, Initializer):
         return []
 
     def getMessages(self):
-        if self.packagemanager == "apt": 
-            installed_software = self.apt_package_manager.get_installed_software_json(False)
-            if self.agent.token_received.wait(timeout=self.agent.refresh_token_interval):
-                mo_id = self.agent.rest_client.get_internal_id(self.agent.serial)
-                #self.agent.rest_client.update_managed_object(mo_id, json.dumps(installed_software))
-                self.agent.rest_client.set_adv_software_list(mo_id, installed_software)
+        installed_software = self.package_manager.get_installed_software_json(False)
+        if self.agent.token_received.wait(timeout=self.agent.refresh_token_interval):
+            mo_id = self.agent.rest_client.get_internal_id(self.agent.serial)
+            #self.agent.rest_client.update_managed_object(mo_id, json.dumps(installed_software))
+            self.agent.rest_client.set_adv_software_list(mo_id, installed_software)
             #return self.apt_package_manager.getInstalledSoftware(True)
-        elif self.packagemanager == "snap":
-            installed_software = self.getInstalledSnaps()
-            return [installed_software]
         return None
-    
-    def getFormatedSnaps(self):
-        snapd = self.agent.snapdClient
-        installedSnaps = snapd.getInstalledSnaps()
-        allInstalled = {}
-        for snap in installedSnaps['result']:
-            allInstalled[snap['name']] = {
-                'version': snap['version'],
-                'channel': snap['channel'],
-                'softwareType': 'snap',
-                'url': ' '
-            }
-        return allInstalled
-    
-    def getInstalledSnaps(self):
-        snapd = self.agent.snapdClient
-        installedSnaps = snapd.getInstalledSnaps()
-        logging.debug(installedSnaps)
-        allInstalled = []
-        for snap in installedSnaps['result']:
-            snapInfo = []
-            # Name
-            snapInfo.append(snap['name'])
-            # Version
-            snapInfo.append(snap['version'] + ' - ' + snap['channel'])
-            # Software Type
-            snapInfo.append('snap')
-            # URL
-            snapInfo.append(' ')
-            allInstalled.extend(snapInfo)
-        return SmartRESTMessage('s/us', '140', allInstalled)
-    
-    def installSnap(self, toBeInstalled):
-        snapd = self.agent.snapdClient
-        wantedSnaps = []
-        errors = []
-        for software in toBeInstalled:
-            name = software[0]
-            wantedSnaps.append(name)
-            channel = software[1].split('##')[-1]
-            toBeVersion = software[1].split('##')[0]
-            action = software[4]
-            if action == "install":
-                # try install
-                logging.info('Install snap "%s" with channel "%s"', name, channel)
-                response = snapd.installSnap(name, channel)
-                if response['status-code'] >= 400:
-                    logging.error('Snap %s error: %s', name, response['result']['message'])
-                    errors.append('Snap' + name + ' error: ' + response['result']['message'])
-                elif response['status-code'] == 202 or response['status-code']== 200 or response['status-code']  == 201:
-                    changeId = response['change']
-                    changeStatus = self.getChangeStatus(changeId)
-                    while not changeStatus['finished']:
-                        time.sleep(3)
-                        changeStatus = self.getChangeStatus(changeId)
-                    logging.debug('Finished snap ' + name)
-                    self.agent.publishMessage(SmartRESTMessage('s/us', '141', [name, toBeVersion, 'version', ' ']))
-                    if changeStatus['error']:
-                        errors.append(changeStatus['error'])
-            elif action == "update":
-                # try update
-                    logging.info('Update snap "%s" with channel "%s"', name, channel)
-                    response = snapd.updateSnaps(name, channel)
-                    if response['status-code'] >= 400:
-                        logging.error('Snap %s error: %s', name, response['result']['message'])
-                        errors.append('Snap' + name + ' error: ' + response['result']['message'])
-                    elif response['status-code'] == 202 or response['status-code']== 200 or response['status-code']  == 201:
-                        changeId = response['change']
-                        changeStatus = self.getChangeStatus(changeId)
-                        while not changeStatus['finished']:
-                            time.sleep(3)
-                            changeStatus = self.getChangeStatus(changeId)
-                        logging.debug('Finished snap ' + name)
-                        if changeStatus['error']:
-                            errors.append(changeStatus['error'])
-            elif action == "delete":
-                # try remove
-                    logging.info('Remove snap "%s" with channel "%s"', name, channel)
-                    response = snapd.deleteSnap(name)
-                    if response['status-code'] >= 400:
-                        logging.error('Snap %s error: %s', name, response['result']['message'])
-                        errors.append('Snap' + name + ' error: ' + response['result']['message'])
-                    elif response['status-code'] == 202 or response['status-code']== 200 or response['status-code']  == 201:
-                        changeId = response['change']
-                        changeStatus = self.getChangeStatus(changeId)
-                        while not changeStatus['finished']:
-                            time.sleep(3)
-                            changeStatus = self.getChangeStatus(changeId)
-                        logging.debug('Finished snap ' + name)
-                        if changeStatus['error']:
-                            errors.append(changeStatus['error'])
-            else:
-                pass
-        return errors
-    
-    def getChangeStatus(self, changeId):
-        snapd = self.agent.snapdClient
-        changeStatus = snapd.getChangeStatus(changeId)
-        error = None
-        finished = changeStatus['result']['status'] == 'Done'
-        if not finished and changeStatus['result']['status'] == 'Error':
-            finished = True
-            error = changeStatus['result']['err']
-        return {
-            'finished': finished,
-            'error': error
-        }
